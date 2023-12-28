@@ -32,6 +32,12 @@ def bytes_to_unicode():
     that "look nice", either in their original form, or a funny shifted character
     like 'Ā', or 'Ġ', etc.
     """
+    """
+    @lw: this function aims to make the conversion looks better, which maps the original int (0-255) to the unicode.
+         I think this may only about the basic vocabulary, since the init vocabulary is the 0-255 byte.
+         This function doesn't aim to find the "best" replacement, but a "nicer" one.
+         However, it's okay to not implement this function.
+    """
     # the 188 integers that render fine in their original form and need no shifting
     bs = list(range(ord("!"), ord("~")+1))+list(range(ord("¡"), ord("¬")+1))+list(range(ord("®"), ord("ÿ")+1))
     cs = bs[:] # all integers b in bs will simply map to chr(b) in the output dict
@@ -51,7 +57,9 @@ def bytes_to_unicode():
 def get_pairs(word):
     """
     Return all bigrams as a set of tuples, of consecutive elements in the iterable word.
+    @lw: return the bigram set of a given word.
     """
+    # @lw: use set to avoid duplication
     pairs = set()
     prev_char = word[0]
     for char in word[1:]:
@@ -98,24 +106,51 @@ class Encoder:
         up the tree. token is a string of one individual 'word' (after regex tokenization)
         and after byte encoding, e.g. 'Ġthere'.
         """
+        # @lw: QUESTION: This bpe function only encodes the word and ignores the phrases. To suuport the 
+        # @lw:           the phrase level or even sentence level, how?
         # token is a string of one individual 'word', after byte encoding, e.g. 'Ġthere'
 
         # memoization, for efficiency
+        # @lw: cache is a dict to store the bpe results?
+        # @lw: if the token in the cache, throw out the reuslts, otherwise, do bpe
         if token in self.cache:
             return self.cache[token]
 
+        # @lw: break the token into characters into a tuple
         word = tuple(token) # individual characters that make up the token, in a tuple
+        # @lw: return the bigrams of the word
         pairs = get_pairs(word) # get all bigrams
 
+        # @lw: if the pairs contain nothing, return the token
+        # @lw: QUESTION: how it possible that the pairs is nothing?
+        # @lw: ANSWER  : get_pairs() function returns the bigrams of the word, if the word
+        # @lw:           doesn't contain two characters, this function will yield nothing
+        # @lw:           (an empty set).
         if not pairs:
             return token
 
+        # @lw: beging bpe
         while True:
 
             # find the next lowest rank bigram that can be merged
+            # @lw: QUESTION: what is bpe_ranks?
+            # @lw: ANSWER  : bpe ranks is a dict, the key is the character combination, the value
+            # @lw:           is the rank. 
+            # @lw: QUESTION: why find the lowest rank to merge? according to the algorithm, 
+            # @lw:           bpe merges the highest rank instead of the lowest.
+            # @lw: ANSWER  : The lower rank represents the higher frequency due to early
+            # @lw:           combination. 
+            # @lw: NOTE: In the encoding stage, both bpe_merges and bpe_ranks are static resource,
+            # @lw:       the two are used to encode the given text to the most frequent byte
+            # @lw:       combinations.
+            # @lw: QUESTION: what is the meaning of `float('inf')`?
+            # @lw: ANSWER  : dict.get(keyname, default), if the keyname doesn't exist in the dict,
+            # @lw:           it returns the default value. In there, returns `inf`.
+            # @lw:           REF: https://www.w3schools.com/python/ref_dictionary_get.asp
             bigram = min(pairs, key = lambda pair: self.bpe_ranks.get(pair, float('inf')))
             if bigram not in self.bpe_ranks:
                 break # no more bigrams are eligible to be merged
+            # @lw: if able to merge, get the first part and the second part
             first, second = bigram
 
             # we will now replace all occurences of (first, second) in the list of current
@@ -126,7 +161,13 @@ class Encoder:
 
                 # find the next occurence of first in the sequence of current words
                 try:
+                    # @lw: QUESTION: what's the function?
+                    # @lw: ANSWER  : src_str.index(tar_str, start, end) => returns the index
+                    # @lw:           of tar_str from start. In there, the j is the index of  
+                    # @lw:           the first char in the word starting from i. 
                     j = word.index(first, i)
+                    # @lw: QUESTION: why use extend here?
+                    # @lw: ANSWER  : get the unmerged part in a token level => merge in the future.
                     new_word.extend(word[i:j])
                     i = j
                 except:
@@ -135,6 +176,7 @@ class Encoder:
 
                 # if this occurence is also followed by second, then merge them into one
                 if word[i] == first and i < len(word)-1 and word[i+1] == second:
+                    # @lw: merge the combination
                     new_word.append(first+second)
                     i += 2
                 else:
@@ -183,8 +225,11 @@ class Encoder:
         parts = []
         tokens = re.findall(self.pat, text)
         for token in tokens:
+            # @lw: convert utf-8 to bytes
             token_bytes = token.encode('utf-8')
+            # @lw: get the char representation of the bytes
             token_translated = ''.join(self.byte_encoder[b] for b in token_bytes)
+            # @lw
             token_merged = self.bpe(token_translated).split(' ')
             token_ix = [self.encoder[bpe_token] for bpe_token in token_merged]
             bpe_idx.extend(token_ix)
