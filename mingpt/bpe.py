@@ -130,6 +130,9 @@ class Encoder:
             return token
 
         # @lw: beging bpe
+        # @lw: NOTE: There are two scenarios to escape this while:
+        # @lw:       1. can't find a mergeble bigram in the word
+        # @lw:       2. only left one gram in the word
         while True:
 
             # find the next lowest rank bigram that can be merged
@@ -171,6 +174,7 @@ class Encoder:
                     new_word.extend(word[i:j])
                     i = j
                 except:
+                    # @lw: can't find the first part in word
                     new_word.extend(word[i:])
                     break
 
@@ -184,9 +188,11 @@ class Encoder:
                     i += 1
 
             # all occurences of (first, second) have been merged to first_second
+            # @lw: convert list to tuple
             new_word = tuple(new_word)
             word = new_word
             if len(word) == 1:
+                # @lw: the tuple only has one element
                 break
             else:
                 pairs = get_pairs(word)
@@ -206,6 +212,11 @@ class Encoder:
         # pre-tokenize the input text into string tokens (words, roughly speaking)
         tokens = re.findall(self.pat, text)
         # process each token into BPE integers
+        # @lw: The encoding stages are:
+        # @lw: 1. encode the given token to bytes
+        # @lw: 2. convert the bytes to corresponding unicode
+        # @lw: 3. use bpe to tokenize this unicode string
+        # @lw: 4. return the result
         for token in tokens:
             # encode the token as a bytes (b'') object
             token_bytes = token.encode('utf-8')
@@ -249,6 +260,11 @@ class Encoder:
 
     def decode(self, bpe_idx):
         """ list of integers comes in, string comes out """
+        # @lw: The decoding stage is:
+        # @lw: 1. convert the bpe_idx to corrresponding token
+        # @lw: 2. merge the tokens to a whole string
+        # @lw: 3. convert the string to bytes
+        # @lw: 4. convert the bytes to unicode
         # inverse map the integers to get the tokens
         tokens_merged = [self.decoder[token] for token in bpe_idx]
         # inverse the byte encoder, e.g. recovering 'Ġ' -> ' ', and get the bytes
